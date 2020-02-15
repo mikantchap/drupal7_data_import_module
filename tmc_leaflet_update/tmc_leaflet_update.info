@@ -1,0 +1,4 @@
+name = Leaflet update
+description = Updates, creates and deletes leaflets
+package = TMC
+core = 7.x

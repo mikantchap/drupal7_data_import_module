@@ -1,0 +1,93 @@
+<?php
+/**
+ * Implementation of hook_menu().
+ *
+ */
+
+require_once __DIR__ . '/LeafletFieldMapping.php';
+require_once __DIR__ . '/EbsLeaflets.php';
+require_once __DIR__ . '/DeleteLeaflets.php';
+require_once __DIR__ . '/DrupalLeaflets.php';
+
+define("ROWSMIN", 250);
+define("EXTERNAL_TABLE", "ebs_leaflets_final_static");
+
+function tmc_leaflet_update_menu() {
+
+  // This is the minimum information you can provide for a menu item.
+  $items['leaflet-update'] = array(
+    'title' => 'Leaflet update',
+    'page callback' => 'leaflet_update',
+  	//'page callback' => 'populate_templeaflets',
+    'access arguments' => array('Access Update leaflets'),
+  );
+  return $items;
+}
+
+function leaflet_update() {
+
+	$uberMsgLog = array();
+
+//Connect to ebs_leaflets_final view
+//Create a leaflets object
+
+	$settings = array('ROWSMIN'=>ROWSMIN);
+	$ebsLeafletObj = new EbsLeaflets($settings);
+
+	$goodEbsLeaflets = $ebsLeafletObj->leaflets;
+	/*
+	$goodEbsLeaflets = $ebsLeafletObj->goodLeaflets;
+	dsm($ebsLeafletObj->badLeaflets);
+	dsm($goodEbsLeaflets);
+	*/
+
+	$uberMsgLog = array_merge($uberMsgLog, $ebsLeafletObj->log);
+
+
+//Later:Put the most recent date from the leaflet or course data in the leaflet object
+
+//CRUD all the leaflets with the leaflet object
+
+	if (count($goodEbsLeaflets) < $settings['ROWSMIN']){
+		$uberMsgLog[] = __FUNCTION__.": leaflet_update was NOT run<br />\n";
+		$uberMsgLog[] = __FUNCTION__.": There are less than ".$settings['ROWSMIN']. " good leaflets.";
+
+	}else{
+
+		//delete or unpublish nodes for leaflets that no longer exist
+		//unpublished nodes don't surrender their url aliases
+		$settingsDelUnpub =  array('removeAction' => 'unpublish');
+		//$settingsDelUnpub =  array('removeAction' => 'delete');
+		$deleteLeafletsObj =  new DeleteLeaflets($settingsDelUnpub, $goodEbsLeaflets);
+
+		//dsm($deleteLeafletsObj);
+		$uberMsgLog = array_merge($uberMsgLog, $deleteLeafletsObj->log);
+
+		$LeafletFieldMappingObj = new LeafletFieldMapping();
+		//dsm($LeafletFieldMappingObj);
+
+
+		//Update and/or create Drupal leaflets
+		$drupalLeafletsObj = new DrupalLeaflets($goodEbsLeaflets, $LeafletFieldMappingObj->fieldMapping);
+
+		$justBeforeUpdateCreate = time();
+		$drupalLeafletsObj->updateCreate();
+
+		array_unshift($uberMsgLog, "UpdateCreate took ".(time() - $justBeforeUpdateCreate)." secs to run.");
+		//watchdog('MC', var_export($uberMsgLog[0], true));
+
+		//asort($drupalLeafletsObj->log);
+		$uberMsgLog = array_merge($uberMsgLog, $drupalLeafletsObj->log);
+
+
+	}
+
+	//array_unshift($uberMsgLog, "Took ".(time() - $start_time)." secs to run.");
+
+
+	return "<h2>leaflet_update was run</h2><br />\n".implode("<br />\n", $uberMsgLog);
+
+
+	//return __FUNCTION__;
+}
+
